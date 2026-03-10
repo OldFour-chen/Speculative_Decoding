@@ -48,8 +48,11 @@ def autoregressive_generate_encoder_decoder(
     )
     decoded_ids[0, 0] = decoder_start_token
 
-    list_tokens_id = (eos_tokens_id if isinstance(eos_tokens_id, list) else [eos_tokens_id])
-    stop_tokens = torch.tensor(list_tokens_id, dtype=torch.long, device=model.device)
+    list_tokens_id = eos_tokens_id if isinstance(eos_tokens_id, list) else [eos_tokens_id]
+    list_tokens_id = [t for t in list_tokens_id if t is not None]
+    stop_tokens = (torch.tensor(list_tokens_id, dtype=torch.long, device=model.device)
+                if list_tokens_id else
+                torch.tensor([], dtype=torch.long, device=model.device))
 
     for curr in range(1, total_len):
         o = model(
@@ -65,7 +68,7 @@ def autoregressive_generate_encoder_decoder(
         cache = o.past_key_values
 
         # check for end token
-        if torch.isin(x, stop_tokens):
+        if stop_tokens.numel() > 0 and torch.isin(x, stop_tokens):
             if debug:
                 printing.end_token_found(curr)
             break

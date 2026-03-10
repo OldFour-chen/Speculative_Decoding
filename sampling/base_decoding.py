@@ -43,10 +43,11 @@ def autoregressive_generate(
     input_ids = torch.full((1, total_len), pad_token_id, dtype=torch.long, device=model.device)
     input_ids[0, :prompt_len] = torch.tensor(inputs, dtype=torch.long, device=model.device)
 
-    list_tokens_id = (
-        eos_tokens_id if isinstance(eos_tokens_id, list) else [eos_tokens_id]
-    )
-    stop_tokens = torch.tensor(list_tokens_id, dtype=torch.long, device=model.device)
+    list_tokens_id = eos_tokens_id if isinstance(eos_tokens_id, list) else [eos_tokens_id]
+    list_tokens_id = [t for t in list_tokens_id if t is not None]
+    stop_tokens = (torch.tensor(list_tokens_id, dtype=torch.long, device=model.device)
+                if list_tokens_id else
+                torch.tensor([], dtype=torch.long, device=model.device))
 
     for curr in range(prompt_len, total_len):
         o = model(input_ids[..., :curr], past_key_values=cache, use_cache=use_cache)
@@ -57,7 +58,7 @@ def autoregressive_generate(
         cache = o.past_key_values
 
         # check for end token
-        if torch.isin(x, stop_tokens):
+        if stop_tokens.numel() > 0 and torch.isin(x, stop_tokens):
             if debug:
                 printing.end_token_found(curr)
             break
@@ -118,8 +119,11 @@ def beam_search_generate(
     beams_probs = torch.full((num_beams,), torch.finfo(torch.float).min, dtype=torch.float, device=model.device)
     last_indexes = torch.full((num_beams,), -1, dtype=torch.long, device=model.device)
 
-    stop_tokens = torch.tensor((eos_tokens_id if isinstance(eos_tokens_id, list) else [eos_tokens_id]), dtype=torch.long, device=model.device)
-
+    _eos_list = eos_tokens_id if isinstance(eos_tokens_id, list) else [eos_tokens_id]
+    _eos_list = [t for t in _eos_list if t is not None]
+    stop_tokens = (torch.tensor(_eos_list, dtype=torch.long, device=model.device)
+                if _eos_list else
+                torch.tensor([], dtype=torch.long, device=model.device))
     # prefill
     probs[:, :prompt_len] = 1.0
     beams_probs[:] = 1.0
@@ -153,7 +157,7 @@ def beam_search_generate(
                 input_vec = input_ids[beam].detach().clone()
                 input_vec[curr] = top_tokens[beam, possibility]
                 last_token_idx = -1
-                if torch.isin(input_vec[curr], stop_tokens) or input_vec[curr] == pad_token_id:
+                if stop_tokens.numel() > 0 and torch.isin(input_vec[curr], stop_tokens) or input_vec[curr] == pad_token_id:
                     last_token_idx = curr
                     
                 already_in = False

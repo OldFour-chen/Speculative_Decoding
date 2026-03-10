@@ -65,7 +65,10 @@ def speculative_generate_encoder_decoder(
     drafter_cache, target_cache = None, None
 
     list_tokens_id = eos_tokens_id if isinstance(eos_tokens_id, list) else [eos_tokens_id]
-    stop_tokens = torch.tensor(list_tokens_id, dtype=torch.long, device=target.device).unsqueeze(1)
+    list_tokens_id = [t for t in list_tokens_id if t is not None]
+    stop_tokens = (torch.tensor(list_tokens_id, dtype=torch.long, device=target.device).unsqueeze(1)
+                if list_tokens_id else
+                torch.tensor([], dtype=torch.long, device=target.device).unsqueeze(1))
     
     drafts_accepted, drafts_speculated = .0, .0
     
